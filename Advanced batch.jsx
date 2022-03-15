@@ -7,7 +7,8 @@
 // BEGIN__HARVEST_EXCEPTION_ZSTRING
 <javascriptresource>
 <name>Advanced batch</name>
-<category>jazzy</category>
+<menu>automate</menu>
+<category>batch</category>
 <eventid>3338481a-9241-4c33-956e-4088f660e936</eventid>
 </javascriptresource>
 // END__HARVEST_EXCEPTION_ZSTRING
