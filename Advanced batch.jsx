@@ -1229,6 +1229,7 @@ function ActionManager() {
     gDocument = s2t("document"),
     gDocumentID = s2t("documentID"),
     gFileReference = s2t("fileReference"),
+    gForceNotify = s2t('forceNotify'),
     gItemIndex = s2t("itemIndex"),
     gNumberOfChildren = s2t("numberOfChildren"),
     gName = s2t("name"),
@@ -1449,11 +1450,13 @@ function ActionManager() {
   this.openFile = function (fileList) {
     if (hostVersion < 20) {
       for (var i = 0; i < fileList.count; i++) {
-        (d = new ActionDescriptor()).putPath(gNull, fileList.getPath(i))
+        (d = new ActionDescriptor()).putPath(gNull, fileList.getPath(i));
+        d.putBoolean(gForceNotify, false);
         executeAction(gOpen, d, DialogModes.NO);
       }
     } else {
       (d = new ActionDescriptor()).putList(gNull, fileList);
+      d.putBoolean(gForceNotify, false);
       executeAction(gOpen, d, DialogModes.NO);
     }
   }
