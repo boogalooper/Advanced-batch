@@ -20,7 +20,7 @@ var localization = "auto", // ru - русский, //en - английский /
   RawExtensions = ["TIF", "CRW", "NEF", "RAF", "ORF", "MRW", "MOS", "SRF", "PEF", "DCR", "CR2", "DNG", "ERF", "X3F", "RAW", "ARW", "CR3", "KDC", "3FR",
     "MEF", "MFW", "NRW", "RWL", "RW2", "SRW", "GPR", "IIQ"];
 if (localization.toUpperCase() != "AUTO") { $.locale = localization.toUpperCase() == "RU" ? "ru" : "en" }; $.localize = true
-var rev = "0.63",
+var rev = "0.64",
   GUID = "3338481a-9241-4c33-956e-4088f660e936",
   s2t = stringIDToTypeID,
   t2s = typeIDToStringID,
@@ -200,6 +200,8 @@ function buildWindow(fromEvent) {
     dlFilter.selection = 0
     var chAcr = grOpenOptions.add("checkbox");
     chAcr.text = STR.Acr;
+    var chSuppress = grOpenOptions.add("checkbox");
+    chSuppress.text = STR.Suppress;
     var grOpenAll = grOpenOptions.add("group");
     grOpenAll.orientation = "row";
     grOpenAll.alignChildren = ["left", "center"];
@@ -352,6 +354,10 @@ function buildWindow(fromEvent) {
   }
   chAcr.onClick = function () {
     CFG.doACR = this.value
+    checkPresetIntegrity()
+  }
+  chSuppress.onClick = function () {
+    CFG.suppress = this.value
     checkPresetIntegrity()
   }
   dlPreset.onChange = function () {
@@ -544,6 +550,7 @@ function buildWindow(fromEvent) {
       checkPresetIntegrity()
     }
     chAcr.value = CFG.doACR
+    chSuppress.value = CFG.suppress
     chOpenAtOnce.value = chGroupBySubfolder.enabled = CFG.openAll
     chGroupBySubfolder.value = CFG.groupBySubfolder
     chOnOpen.value = CFG.autoStart
@@ -1451,13 +1458,13 @@ function ActionManager() {
     if (hostVersion < 20) {
       for (var i = 0; i < fileList.count; i++) {
         (d = new ActionDescriptor()).putPath(gNull, fileList.getPath(i));
-        d.putBoolean(gForceNotify, false);
-        executeAction(gOpen, d, DialogModes.NO);
+        d.putBoolean(gForceNotify, !CFG.suppress);
+        executeAction(gOpen, d, !CFG.suppress ? DialogModes.ERROR :DialogModes.NO );
       }
     } else {
       (d = new ActionDescriptor()).putList(gNull, fileList);
-      d.putBoolean(gForceNotify, false);
-      executeAction(gOpen, d, DialogModes.NO);
+      d.putBoolean(gForceNotify, !CFG.suppress);
+      executeAction(gOpen, d, !CFG.suppress ? DialogModes.ERROR :DialogModes.NO);
     }
   }
   this.closeDocument = function (save) {
@@ -1579,6 +1586,7 @@ function Locale() {
     this.Stop = { ru: "стоп", en: "stop" },
     this.Subfolders = { ru: "обрабатывать подкаталоги", en: "include all subfolders" },
     this.Scripts = { ru: "Скрипты", en: "Scripts" };
+  this.Suppress = { ru: 'suppress opening dialogs', en: 'suppress opening dialogs' }
 }
 function Config() {
   this.sourceMode = 0
@@ -1610,6 +1618,7 @@ function Config() {
   this.keepStruct = true
   this.replaceFile = true
   this.preset = ''
+  this.suppress = false
 }
 function FileSystem() {
   this.findAllFiles = function (srcFolderStr, destObj, useSubfolders, skipOpened) {
@@ -1801,6 +1810,7 @@ function Preset() {
     s.keepStruct = a[12] == "true" ? true : false
     s.replaceFile = a[13] == "true" ? true : false
     s.doACR = false
+    s.suppress = false
     s.openAll = false
     s.groupBySubfolder = false
     s.saveToFolder = false
@@ -1904,6 +1914,7 @@ function Preset() {
     return false
   }
   PresetObject = function () {
+    this.suppress = false
     this.doACR = false
     this.openAll = false
     this.groupBySubfolder = false
