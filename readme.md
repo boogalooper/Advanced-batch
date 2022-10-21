@@ -1,7 +1,5 @@
 # Advanced batch
 
-The script allows to find and run an action suitable for an open document.
-
 ![](assets/20220316_231334_2022-03-16_23-05-11.png)
 
 ### Workspace preparation:
