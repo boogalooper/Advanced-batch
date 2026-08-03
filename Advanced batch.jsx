@@ -1459,12 +1459,12 @@ function ActionManager() {
       for (var i = 0; i < fileList.count; i++) {
         (d = new ActionDescriptor()).putPath(gNull, fileList.getPath(i));
         d.putBoolean(gForceNotify, !CFG.suppress);
-        executeAction(gOpen, d, !CFG.suppress ? DialogModes.ERROR :DialogModes.NO );
+        executeAction(gOpen, d, !CFG.suppress ? DialogModes.ERROR : DialogModes.NO);
       }
     } else {
       (d = new ActionDescriptor()).putList(gNull, fileList);
       d.putBoolean(gForceNotify, !CFG.suppress);
-      executeAction(gOpen, d, !CFG.suppress ? DialogModes.ERROR :DialogModes.NO);
+      executeAction(gOpen, d, !CFG.suppress ? DialogModes.ERROR : DialogModes.NO);
     }
   }
   this.closeDocument = function (save) {
@@ -1585,8 +1585,8 @@ function Locale() {
     this.StopProc = { ru: "Превать обработку", en: "Stop processing" },
     this.Stop = { ru: "стоп", en: "stop" },
     this.Subfolders = { ru: "обрабатывать подкаталоги", en: "include all subfolders" },
-    this.Scripts = { ru: "Скрипты", en: "Scripts" };
-  this.Suppress = { ru: 'suppress opening dialogs', en: 'suppress opening dialogs' }
+    this.Scripts = { ru: "Скрипты", en: "Scripts" },
+    this.Suppress = { ru: 'подавлять диалоговые окна при открытии', en: 'suppress opening dialogs' }
 }
 function Config() {
   this.sourceMode = 0
