@@ -66,7 +66,7 @@ function main() {
       if (result != 2) {
         if (newBatch && CFG.reverseOrder && CFG.fileList.count > 1) {
           if (hostVersion > 14) {
-            app.doForcedProgress($.localize(STR.ReverseProgress), "reverseFileListWithProgress()")
+            app.doForcedProgress(localize(STR.ReverseProgress), "reverseFileListWithProgress()")
           } else {
             reverseFileListWithProgress()
           }
