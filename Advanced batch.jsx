@@ -20,7 +20,7 @@ var localization = "auto", // ru - русский, //en - английский /
   RawExtensions = ["TIF", "CRW", "NEF", "RAF", "ORF", "MRW", "MOS", "SRF", "PEF", "DCR", "CR2", "DNG", "ERF", "X3F", "RAW", "ARW", "CR3", "KDC", "3FR",
     "MEF", "MFW", "NRW", "RWL", "RW2", "SRW", "GPR", "IIQ"];
 if (localization.toUpperCase() != "AUTO") { $.locale = localization.toUpperCase() == "RU" ? "ru" : "en" }; $.localize = true
-var rev = "0.65",
+var rev = "0.66",
   GUID = "3338481a-9241-4c33-956e-4088f660e936",
   s2t = stringIDToTypeID,
   t2s = typeIDToStringID,
@@ -51,7 +51,7 @@ function main() {
   AM.getScriptSettings(CFG)
   if (!event) {
     if (!EVT.chkEvt() && !CFG.globalErr || fromBridge) {
-      var result = 0, w;
+      var result = 0, w, newBatch = false;
       if (CFG.batch != '' && CFG.batch >= 0 && !fromBridge) {
         if (confirmBatch()) {
           CFG.fileCounter = CFG.batch
@@ -61,8 +61,17 @@ function main() {
       if (result != 1) {
         resetBatch(true)
         w = buildWindow(false); result = w.show()
+        newBatch = result == 1
       }
       if (result != 2) {
+        if (newBatch && CFG.reverseOrder && CFG.fileList.count > 1) {
+          if (hostVersion > 14) {
+            app.doForcedProgress(STR.ReverseProgress, "reverseFileListWithProgress()")
+          } else {
+            reverseFileListWithProgress()
+          }
+          AM.putScriptSettings(CFG)
+        }
         EVT.addEvt()
         CFG.total = CFG.fileList.count + CFG.docList.count
         doBatch()
@@ -348,7 +357,6 @@ function buildWindow(fromEvent) {
   }
   chReverseOrder.onClick = function () {
     CFG.reverseOrder = this.value
-    CFG.fileList = reverseFileList(CFG.fileList)
   }
   chOpenAtOnce.onClick = function () {
     CFG.openAll = chGroupBySubfolder.enabled = this.value;
@@ -695,7 +703,6 @@ function buildWindow(fromEvent) {
         }
       } else { CFG.lastPath = userSelectedFolder.fsName }
       CFG.fileList = allFiles[filter] ? allFiles[filter] : new ActionList()
-      if (CFG.reverseOrder) CFG.fileList = reverseFileList(CFG.fileList)
       CFG.docList = new ActionDescriptor()
       if (CFG.sourceMode == 2) {
         stPath.text = stPath.helpTip = STR.BridgeList
@@ -726,11 +733,6 @@ function buildWindow(fromEvent) {
     function sortShortcuts(a, b) {
       if (a > b) { return 1 } else { return -1 }
     }
-  }
-  function reverseFileList(list) {
-    var output = new ActionList()
-    for (var i = list.count - 1; i >= 0; i--) output.putPath(list.getPath(i))
-    return output
   }
   function addAction(parent, desc) {
     {
@@ -978,6 +980,21 @@ function buildWindow(fromEvent) {
     }
   }
   return w
+}
+function reverseFileListWithProgress() {
+  var source = CFG.fileList,
+    output = new ActionList(),
+    total = source.count,
+    done = 0;
+
+  for (var i = total - 1; i >= 0; i--) {
+    output.putPath(source.getPath(i))
+    done++
+    if (hostVersion > 14 && (done == total || done % 50 == 0)) {
+      app.updateProgress(done, total)
+    }
+  }
+  CFG.fileList = output
 }
 function doBatch() {
   while (doLoop()) { }
@@ -1585,6 +1602,7 @@ function Locale() {
     this.OpenAll = { ru: "открыть сразу все", en: "open all at once" },
     this.OpenBySubfolder = { ru: "группировать по подпапкам", en: "group by subfolder" },
     this.ReverseOrder = { ru: "открывать в обратном порядке", en: "open in reverse order" },
+    this.ReverseProgress = { ru: "Подготовка списка файлов...", en: "Preparing file list..." },
     this.OpenedFiles = { ru: "открытые документы", en: "opened documents" },
     this.OpenedList = { ru: "список открытых файлов", en: "opened files list" },
     this.OpenFldr = { ru: "открыть папку...", en: "open folder..." },
