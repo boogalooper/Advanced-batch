@@ -20,7 +20,7 @@ var localization = "auto", // ru - русский, //en - английский /
   RawExtensions = ["TIF", "CRW", "NEF", "RAF", "ORF", "MRW", "MOS", "SRF", "PEF", "DCR", "CR2", "DNG", "ERF", "X3F", "RAW", "ARW", "CR3", "KDC", "3FR",
     "MEF", "MFW", "NRW", "RWL", "RW2", "SRW", "GPR", "IIQ"];
 if (localization.toUpperCase() != "AUTO") { $.locale = localization.toUpperCase() == "RU" ? "ru" : "en" }; $.localize = true
-var rev = "0.64",
+var rev = "0.65",
   GUID = "3338481a-9241-4c33-956e-4088f660e936",
   s2t = stringIDToTypeID,
   t2s = typeIDToStringID,
@@ -188,6 +188,8 @@ function buildWindow(fromEvent) {
     grOpenOptions.alignChildren = ["left", "fill"];
     var chSubfld = grOpenOptions.add("checkbox");
     chSubfld.text = STR.Subfolders;
+    var chReverseOrder = grOpenOptions.add("checkbox");
+    chReverseOrder.text = STR.ReverseOrder;
     var gr = grOpenOptions.add("group");
     gr.orientation = "row";
     gr.alignChildren = ["left", "fill"];
@@ -343,6 +345,10 @@ function buildWindow(fromEvent) {
     getSourceFolder();
     doNotUpdate = false;
     ok.enabled = bnOkStatus()
+  }
+  chReverseOrder.onClick = function () {
+    CFG.reverseOrder = this.value
+    CFG.fileList = reverseFileList(CFG.fileList)
   }
   chOpenAtOnce.onClick = function () {
     CFG.openAll = chGroupBySubfolder.enabled = this.value;
@@ -539,10 +545,11 @@ function buildWindow(fromEvent) {
         stCounter.text = STR.Counter + CFG.total
         ok.text = STR.Next
         cancel.text = STR.StopProc
-        dlSource.enabled = bnSourceFolder.enabled = chSubfld.enabled = dlFilter.enabled = stFilter.enabled = false
+        dlSource.enabled = bnSourceFolder.enabled = chSubfld.enabled = chReverseOrder.enabled = dlFilter.enabled = stFilter.enabled = false
         AM.getScriptSettings(CFG)
       }
       chSubfld.value = CFG.doSubfolders
+      chReverseOrder.value = CFG.reverseOrder
       loadPresets();
       doNotUpdate = true
       dlPreset.selection = (p = dlPreset.find(CFG.preset)) != null ? p : 0
@@ -688,6 +695,7 @@ function buildWindow(fromEvent) {
         }
       } else { CFG.lastPath = userSelectedFolder.fsName }
       CFG.fileList = allFiles[filter] ? allFiles[filter] : new ActionList()
+      if (CFG.reverseOrder) CFG.fileList = reverseFileList(CFG.fileList)
       CFG.docList = new ActionDescriptor()
       if (CFG.sourceMode == 2) {
         stPath.text = stPath.helpTip = STR.BridgeList
@@ -718,6 +726,11 @@ function buildWindow(fromEvent) {
     function sortShortcuts(a, b) {
       if (a > b) { return 1 } else { return -1 }
     }
+  }
+  function reverseFileList(list) {
+    var output = new ActionList()
+    for (var i = list.count - 1; i >= 0; i--) output.putPath(list.getPath(i))
+    return output
   }
   function addAction(parent, desc) {
     {
@@ -1136,7 +1149,11 @@ function openFiles() {
   var success = false
   do {
     if (CFG.fileCounter >= CFG.fileList.count && CFG.docList.count == 0) break;
-    if (hostVersion > 14) app.doForcedProgress("", "openFile ()") else { openFile() }
+    if (hostVersion > 14) {
+      app.doForcedProgress("", "openFile ()")
+    } else {
+      openFile()
+    }
   } while (success == false)
   return success
   function openFile() {
@@ -1567,6 +1584,7 @@ function Locale() {
     this.Open = { ru: "Начать обработку", en: "Start processing" },
     this.OpenAll = { ru: "открыть сразу все", en: "open all at once" },
     this.OpenBySubfolder = { ru: "группировать по подпапкам", en: "group by subfolder" },
+    this.ReverseOrder = { ru: "открывать в обратном порядке", en: "open in reverse order" },
     this.OpenedFiles = { ru: "открытые документы", en: "opened documents" },
     this.OpenedList = { ru: "список открытых файлов", en: "opened files list" },
     this.OpenFldr = { ru: "открыть папку...", en: "open folder..." },
@@ -1600,6 +1618,7 @@ function Config() {
   this.lastFileType = ''
   this.openAll = false
   this.groupBySubfolder = false
+  this.reverseOrder = false
   this.activeDocument = new ActionDescriptor()
   this.saveToFolder = false
   this.globalErr = false
@@ -1673,8 +1692,10 @@ function FileSystem() {
     return s.length - s.lastIndexOf(".") <= 5 && s.lastIndexOf(".") >= 0 ? s.slice(0, s.lastIndexOf(".")) : s
   }
   this.getExtension = function (f) {
-    var s = decodeURI(f).toUpperCase()
-    s = s.slice(s.lastIndexOf(".") + 1, s.length)
+    var s = f.name,
+      p = s.lastIndexOf(".")
+    if (p < 0) return null
+    s = s.slice(p + 1).toUpperCase()
     return objOfFileExtensions[s] ? s : null
   }
   this.saveAs = function (file, pth) {
@@ -1751,8 +1772,12 @@ function FileSystem() {
     diff = diff != "" ? Folder(diff).toString() : ""
     to = Folder(to)
     if (Boolean(CFG.keepStruct) && from != null && diff != "") {
-      if (from.toString().indexOf(diff) != 1) {
-        to = new Folder(to + from.toString().replace(diff, ""))
+      var fromPath = from.toString(),
+        prefix = diff.charAt(diff.length - 1) == "/" ? diff : diff + "/"
+      if (fromPath == diff || fromPath.indexOf(prefix) == 0) {
+        var relativePath = fromPath.slice(diff.length)
+        if (relativePath != "" && relativePath.charAt(0) != "/") relativePath = "/" + relativePath
+        to = new Folder(to + relativePath)
         if (!to.exists) { try { to.create() } catch (e) { } }
       }
     }
