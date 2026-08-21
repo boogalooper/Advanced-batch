@@ -20,7 +20,7 @@ var localization = "auto", // ru - русский, //en - английский /
   RawExtensions = ["TIF", "CRW", "NEF", "RAF", "ORF", "MRW", "MOS", "SRF", "PEF", "DCR", "CR2", "DNG", "ERF", "X3F", "RAW", "ARW", "CR3", "KDC", "3FR",
     "MEF", "MFW", "NRW", "RWL", "RW2", "SRW", "GPR", "IIQ"];
 if (localization.toUpperCase() != "AUTO") { $.locale = localization.toUpperCase() == "RU" ? "ru" : "en" }; $.localize = true
-var rev = "0.66",
+var rev = "0.7",
   GUID = "3338481a-9241-4c33-956e-4088f660e936",
   s2t = stringIDToTypeID,
   t2s = typeIDToStringID,
@@ -209,6 +209,9 @@ function buildWindow(fromEvent) {
     var dlFilter_array = [STR.AllFiles];
     var dlFilter = gr.add("dropdownlist", undefined, undefined, { items: dlFilter_array });
     dlFilter.selection = 0
+    var bnExceptSelected = gr.add("button");
+    bnExceptSelected.text = STR.ExceptSelected;
+    bnExceptSelected.visible = false;
     var chAcr = grOpenOptions.add("checkbox");
     chAcr.text = STR.Acr;
     var chSuppress = grOpenOptions.add("checkbox");
@@ -344,8 +347,22 @@ function buildWindow(fromEvent) {
   }
   dlFilter.onChange = function () {
     if (!w.visible) return
+    var wasExceptSelected = CFG.excludeSelectedType
     CFG.lastFileType = this.selection.text
+    if (this.selection.index == 0) CFG.excludeSelectedType = false
     if (CFG.lastPath != "") enumFiles(Folder(CFG.lastPath), false)
+    updateExceptSelectedButton()
+    if (wasExceptSelected || CFG.excludeSelectedType) AM.putScriptSettings(CFG)
+    ok.enabled = bnOkStatus()
+  }
+  bnExceptSelected.onClick = function () {
+    if (!dlFilter.selection || dlFilter.selection.index == 0) return
+    CFG.lastFileType = dlFilter.selection.text
+    CFG.excludeSelectedType = !CFG.excludeSelectedType
+    applyCurrentFileFilter()
+    stCounter.text = STR.Counter + CFG.fileList.count
+    updateExceptSelectedButton()
+    AM.putScriptSettings(CFG)
     ok.enabled = bnOkStatus()
   }
   chSubfld.onClick = function () {
@@ -553,7 +570,7 @@ function buildWindow(fromEvent) {
         stCounter.text = STR.Counter + CFG.total
         ok.text = STR.Next
         cancel.text = STR.StopProc
-        dlSource.enabled = bnSourceFolder.enabled = chSubfld.enabled = chReverseOrder.enabled = dlFilter.enabled = stFilter.enabled = false
+        dlSource.enabled = bnSourceFolder.enabled = chSubfld.enabled = chReverseOrder.enabled = dlFilter.enabled = stFilter.enabled = bnExceptSelected.enabled = false
         AM.getScriptSettings(CFG)
       }
       chSubfld.value = CFG.doSubfolders
@@ -582,6 +599,7 @@ function buildWindow(fromEvent) {
     for (var i = 0; i < CFG.options.count; i++) { addAction(pnAtn, CFG.options.getObjectValue(i)) }
     renew = true
     if (dlSave.selection == CFG.saveMode) { dlSave.onChange() } else { dlSave.selection = CFG.saveMode == 3 ? 2 : CFG.saveMode }
+    updateExceptSelectedButton()
     ok.enabled = bnOkStatus()
     w.layout.layout(true)
   }
@@ -646,9 +664,48 @@ function buildWindow(fromEvent) {
     }
     if (result == false) { stPath.text = stPath.helpTip = CFG.lastPath = stCounter.text = ""; return false } else { return true }
   }
+  function updateExceptSelectedButton() {
+    var hasFormat = dlFilter.selection != null && dlFilter.selection.index > 0
+    bnExceptSelected.visible = hasFormat
+    bnExceptSelected.text = CFG.excludeSelectedType && hasFormat ? "[x] " + localize(STR.ExceptSelected) : localize(STR.ExceptSelected)
+    if (w.visible) w.layout.layout(true)
+  }
+  function getCurrentFileFilter() {
+    var filter = CFG.lastFileType
+    if (filter == "" || filter == STR.AllFiles.ru || filter == STR.AllFiles.en) return STR.AllFiles.en
+    return String(filter).toUpperCase()
+  }
+  function applyCurrentFileFilter() {
+    var filter = getCurrentFileFilter(),
+      all = allFiles[STR.AllFiles.en],
+      filterReset = false;
+    if (CFG.excludeSelectedType && filter == STR.AllFiles.en) {
+      CFG.excludeSelectedType = false
+      filterReset = true
+    }
+    if (CFG.excludeSelectedType && filter != STR.AllFiles.en && !allFiles[filter]) {
+      CFG.excludeSelectedType = false
+      CFG.lastFileType = ""
+      filter = STR.AllFiles.en
+      filterReset = true
+    }
+    if (CFG.excludeSelectedType && filter != STR.AllFiles.en) {
+      var result = new ActionList()
+      if (all) {
+        for (var i = 0; i < all.count; i++) {
+          var fle = all.getPath(i)
+          if (FS.getExtension(fle) != filter) result.putPath(fle)
+        }
+      }
+      CFG.fileList = result
+    } else {
+      CFG.fileList = allFiles[filter] ? allFiles[filter] : new ActionList()
+    }
+    CFG.docList = new ActionDescriptor()
+    return filterReset
+  }
   function enumFiles(userSelectedFolder, readFromFS) {
     readFromFS = readFromFS == false ? false : true
-    var filter = CFG.lastFileType == "" || CFG.lastFileType == STR.AllFiles.ru || CFG.lastFileType == STR.AllFiles.en ? STR.AllFiles.en : CFG.lastFileType
     if (readFromFS) {
       switch (CFG.sourceMode) {
         case 0:
@@ -702,8 +759,7 @@ function buildWindow(fromEvent) {
           }
         }
       } else { CFG.lastPath = userSelectedFolder.fsName }
-      CFG.fileList = allFiles[filter] ? allFiles[filter] : new ActionList()
-      CFG.docList = new ActionDescriptor()
+      var filterReset = applyCurrentFileFilter()
       if (CFG.sourceMode == 2) {
         stPath.text = stPath.helpTip = STR.BridgeList
       }
@@ -722,6 +778,8 @@ function buildWindow(fromEvent) {
           dlFilter.add("item", shortList[i])
         }
         if (dlFilter.find(CFG.lastFileType)) { dlFilter.selection = dlFilter.find(CFG.lastFileType).index } else { dlFilter.selection = 0 }
+        updateExceptSelectedButton()
+        if (filterReset) AM.putScriptSettings(CFG)
       }
     } else {
       CFG.fileList = new ActionList()
@@ -1559,6 +1617,7 @@ function Locale() {
   this.Acr = { ru: "использовать ACR для поддерживаемых типов файлов", en: "use ACR for supported file types" },
     this.Activate = { ru: "включить", en: "active" },
     this.AllFiles = { ru: "все файлы", en: "all files" },
+    this.ExceptSelected = { ru: "все, кроме выбранного формата", en: "all except selected format" },
     this.Atn = { ru: "Операции:", en: "Actions:" },
     this.Auto = { ru: "автоматически запускать первую операцию при открытии документа", en: "automatically start first action when opening a document" },
     this.BridgeList = { ru: "список файлов из Bridge", en: "Bridge file list" },
@@ -1634,6 +1693,7 @@ function Config() {
   this.fileCounter = 0
   this.total = 0
   this.lastFileType = ''
+  this.excludeSelectedType = false
   this.openAll = false
   this.groupBySubfolder = false
   this.reverseOrder = false
