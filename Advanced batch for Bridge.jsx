@@ -1,5 +1,5 @@
 ﻿/*//////////////////////////////////////////////////////////////////////////////
-Advanced batch startup script - revision 0.1
+Advanced batch startup script - revision 0.2
 jazz-y@ya.ru
 
 put this script to:
@@ -19,20 +19,54 @@ if (BridgeTalk.appName == "bridge") {
 
 advancedBatchToolMenu.onSelect = function () { advancedBatchThumbnailMenu.onSelect() }
 advancedBatchThumbnailMenu.onSelect = function () {
-  BridgeTalk.launch('photoshop')
+  var bridgeSelection = getBridgeSelectionSnapshot(),
+    bt = new BridgeTalk()
+  bt.target = "photoshop"
+  bt.body = "" + runAdvancedBatch.toString() + "; runAdvancedBatch(" + bridgeSelection.toSource() + ");"
+  bt.onError = function (err) { alert("Error!\n" + err.body) }
+  bt.send()
 
-  if (BridgeTalk.isRunning('photoshop')) {
-    var bt = new BridgeTalk()
-    bt.target = "photoshop"
-    bt.body = "" + runAdvancedBatch.toString() + "; runAdvancedBatch();"
-    bt.onError = function (err) { alert("Error!\n" + err.body) }
-    bt.send()
-  } else { alert("Processing stopped! The script could not initialize the launch of Adobe Photoshop") }
+  function getBridgeSelectionSnapshot() {
+    var result = { version: 2, presentationPath: app.document.presentationPath, items: [] },
+      selections = app.document.selections,
+      len = selections.length;
+    if (len == 0) {
+      var current = bridgeItemFromThumbnail(app.document.thumbnail)
+      if (current != null) result.items.push(current)
+    } else {
+      for (var i = 0; i < len; i++) {
+        var item = bridgeItemFromThumbnail(selections[i])
+        if (item != null) result.items.push(item)
+      }
+    }
+    return result
+    function bridgeItemFromThumbnail(thumbnail) {
+      if (thumbnail == null) return null
+      var bridgeType = "other",
+        aliasType = "",
+        path = "",
+        spec;
+      try { bridgeType = thumbnail.type } catch (e) { }
+      if (bridgeType == "alias") {
+        try { aliasType = thumbnail.aliasType } catch (e) { }
+      }
+      try { spec = thumbnail.spec } catch (e) { }
+      if (spec != undefined) {
+        try { path = spec.fsName } catch (e) { }
+      }
+      if (path == "") {
+        try { path = thumbnail.path } catch (e) { }
+      }
+      if (path == "") return null
+      return { path: path, type: bridgeType, aliasType: aliasType }
+    }
+  }
 
-  function runAdvancedBatch() {
+  function runAdvancedBatch(bridgeSelection) {
     try {
       var desc = new ActionDescriptor()
       desc.putBoolean(stringIDToTypeID("fromBridge"), true)
+      if (bridgeSelection != null) desc.putString(stringIDToTypeID("bridgeSelection"), bridgeSelection.toSource())
       executeAction(stringIDToTypeID("3338481a-9241-4c33-956e-4088f660e936"), desc, DialogModes.NO)
     } catch (e) { alert("Could not find and run instance of Advanced batch!") }
   }

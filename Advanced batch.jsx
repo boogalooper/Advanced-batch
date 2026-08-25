@@ -20,7 +20,7 @@ var localization = "auto", // ru - русский, //en - английский /
   RawExtensions = ["TIF", "CRW", "NEF", "RAF", "ORF", "MRW", "MOS", "SRF", "PEF", "DCR", "CR2", "DNG", "ERF", "X3F", "RAW", "ARW", "CR3", "KDC", "3FR",
     "MEF", "MFW", "NRW", "RWL", "RW2", "SRW", "GPR", "IIQ"];
 if (localization.toUpperCase() != "AUTO") { $.locale = localization.toUpperCase() == "RU" ? "ru" : "en" }; $.localize = true
-var rev = "0.7",
+var rev = "0.72",
   GUID = "3338481a-9241-4c33-956e-4088f660e936",
   s2t = stringIDToTypeID,
   t2s = typeIDToStringID,
@@ -36,6 +36,7 @@ var rev = "0.7",
   objOfFileExtensions = {},
   event,
   fromBridge = false,
+  bridgeSelection = null,
   AM = new ActionManager,
   STR = new Locale,
   CFG = new Config,
@@ -44,7 +45,13 @@ var rev = "0.7",
   PS = new Preset,
   actionsList = AM.getActionsList(),
   scriptsList = FS.getScripts();
-try { fromBridge = (d = app.playbackParameters).getBoolean(d.getKey(0)) } catch (e) { }
+try {
+  var playback = app.playbackParameters,
+    fromBridgeKey = s2t("fromBridge"),
+    bridgeSelectionKey = s2t("bridgeSelection");
+  if (playback.hasKey(fromBridgeKey)) fromBridge = playback.getBoolean(fromBridgeKey)
+  if (playback.hasKey(bridgeSelectionKey)) bridgeSelection = eval(playback.getString(bridgeSelectionKey))
+} catch (e) { }
 try { event = arguments[1] } catch (e) { }
 main()
 function main() {
@@ -164,7 +171,9 @@ function buildWindow(fromEvent) {
   var doNotUpdate = false,
     allFiles = {},
     renew = true,
-    noAction = false;
+    noAction = false,
+    bridgeSelectionOnce = bridgeSelection,
+    bridgeSourceInitialized = false;
   arrayToObject(fileExtensions, objOfFileExtensions)
   arrayToObject(RawExtensions, objOfFileExtensions)
   {
@@ -561,7 +570,19 @@ function buildWindow(fromEvent) {
           CFG.sourceMode = CFG.sourceMode == 2 && !dlSource.items[2].enabled ? 0 : CFG.sourceMode
           if (AM.findAllDocs().count >= 2) CFG.sourceMode = 1;
           dlSource.selection = CFG.sourceMode
-        } else { dlSource.selection = 2 }
+        } else {
+          CFG.sourceMode = 2
+          dlSource.selection = 2
+          if (!bridgeSourceInitialized) {
+            if (bridgeSelectionOnce != null) {
+              var initialBridgeSelection = bridgeSelectionOnce
+              bridgeSelectionOnce = null
+              enumFiles(initialBridgeSelection)
+            } else {
+              getSourceFolder()
+            }
+          }
+        }
         w.remove(bar)
       }
       else {
@@ -633,21 +654,36 @@ function buildWindow(fromEvent) {
         var userSelectedFolder = AM.findAllDocs()
         break;
       case 2:
-        var userSelectedFolder = []
-        if (BridgeTalk.isRunning('bridge')) {
-          var bt = new BridgeTalk();
-          bt.target = "bridge";
-          bt.body = "" + "function getFilesFromBridge(){var files=[app.document.presentationPath];var len=app.document.selections.length;if(len==0){files.push(app.document.presentationPath)}{for (var i=0; i<len; i++){files.push(app.document.selections[i].path)}}return files.toSource()}" + "; getFilesFromBridge();";
-          bt.onResult = function (response) {
-            userSelectedFolder = eval(response.body)
-          }
-          bt.onError = function (err) {
-            alert("Error!\n" + err.body)
-          }
-          bt.send(3000);
+        var userSelectedFolder = null
+        if (bridgeSelectionOnce != null) {
+          userSelectedFolder = bridgeSelectionOnce
+          bridgeSelectionOnce = null
         } else {
-          alert(STR.ErrBridge)
-          return false
+          if (BridgeTalk.isRunning('bridge')) {
+            var bridgeError = false,
+              bridgeErrorShown = false,
+              bt = new BridgeTalk();
+            bt.target = "bridge";
+            bt.body = "(" + getBridgeSelectionSnapshot.toString() + ")();";
+            bt.timeout = 30
+            bt.onResult = function (response) {
+              try { userSelectedFolder = eval(response.body) } catch (e) { bridgeError = true }
+            }
+            bt.onError = function (err) {
+              bridgeError = true
+              bridgeErrorShown = true
+              alert("Error!\n" + err.body)
+            }
+            bt.onTimeout = function () { bridgeError = true }
+            bt.send(30);
+            if (bridgeError || userSelectedFolder == null) {
+              if (!bridgeErrorShown) alert(STR.ErrBridge)
+              return false
+            }
+          } else {
+            alert(STR.ErrBridge)
+            return false
+          }
         }
         break;
     }
@@ -663,6 +699,85 @@ function buildWindow(fromEvent) {
       }
     }
     if (result == false) { stPath.text = stPath.helpTip = CFG.lastPath = stCounter.text = ""; return false } else { return true }
+  }
+  function getBridgeSelectionSnapshot() {
+    var result = { version: 2, presentationPath: app.document.presentationPath, items: [] },
+      selections = app.document.selections,
+      len = selections.length;
+    if (len == 0) {
+      var current = bridgeItemFromThumbnail(app.document.thumbnail)
+      if (current != null) result.items.push(current)
+    } else {
+      for (var i = 0; i < len; i++) {
+        var item = bridgeItemFromThumbnail(selections[i])
+        if (item != null) result.items.push(item)
+      }
+    }
+    return result.toSource()
+    function bridgeItemFromThumbnail(thumbnail) {
+      if (thumbnail == null) return null
+      var bridgeType = "other",
+        aliasType = "",
+        path = "",
+        spec;
+      try { bridgeType = thumbnail.type } catch (e) { }
+      if (bridgeType == "alias") {
+        try { aliasType = thumbnail.aliasType } catch (e) { }
+      }
+      try { spec = thumbnail.spec } catch (e) { }
+      if (spec != undefined) {
+        try { path = spec.fsName } catch (e) { }
+      }
+      if (path == "") {
+        try { path = thumbnail.path } catch (e) { }
+      }
+      if (path == "") return null
+      return { path: path, type: bridgeType, aliasType: aliasType }
+    }
+  }
+  function normalizeBridgeSelection(data) {
+    if (data == null) return { version: 2, presentationPath: "", items: [] }
+    if (data instanceof Array) {
+      var legacy = { version: 1, presentationPath: data.length ? data[0] : "", items: [] }
+      for (var i = 1; i < data.length; i++) {
+        var fsObject = File(data[i])
+        legacy.items.push({ path: data[i], type: fsObject instanceof Folder ? "folder" : "file", aliasType: "" })
+      }
+      return legacy
+    }
+    if (!(data.items instanceof Array)) data.items = []
+    if (data.presentationPath == undefined) data.presentationPath = ""
+    return data
+  }
+  function getBridgeItemType(item) {
+    if (item == null) return ""
+    var type = item.type == undefined ? "" : String(item.type).toLowerCase()
+    if (type == "alias") type = item.aliasType == undefined ? "" : String(item.aliasType).toLowerCase()
+    return type
+  }
+  function getBridgeLastPath(data) {
+    data = normalizeBridgeSelection(data)
+    var items = data.items,
+      presentationFolder = Folder(data.presentationPath);
+    if (presentationFolder.exists) {
+      if (items.length == 1 && getBridgeItemType(items[0]) == "folder") {
+        var selectedFolder = Folder(items[0].path)
+        if (selectedFolder.exists) return selectedFolder.fsName
+      }
+      return presentationFolder.fsName
+    }
+    for (var i = 0; i < items.length; i++) {
+      var type = getBridgeItemType(items[i])
+      if (type == "folder") {
+        var fol = Folder(items[i].path)
+        if (fol.exists) return fol.fsName
+      }
+      if (type == "file") {
+        var fle = File(items[i].path)
+        if (fle instanceof File && fle.exists) return fle.parent.fsName
+      }
+    }
+    return ""
   }
   function updateExceptSelectedButton() {
     var hasFormat = dlFilter.selection != null && dlFilter.selection.index > 0
@@ -712,18 +827,22 @@ function buildWindow(fromEvent) {
           FS.findAllFiles(userSelectedFolder, allFiles = {}, CFG.doSubfolders)
           break;
         case 2:
+          bridgeSourceInitialized = true
           allFiles = {}
-          for (var i = 1; i < userSelectedFolder.length; i++) {
-            var tmp = File(userSelectedFolder[i])
-            if (tmp.exists) {
-              if (FS.isFolder(tmp)) {
-                FS.findAllFiles(tmp, allFiles, CFG.doSubfolders)
-              }
-              else {
-                var ext = FS.getExtension(tmp)
+          userSelectedFolder = normalizeBridgeSelection(userSelectedFolder)
+          for (var i = 0; i < userSelectedFolder.items.length; i++) {
+            var item = userSelectedFolder.items[i],
+              itemType = getBridgeItemType(item);
+            if (itemType == "folder") {
+              var tmpFolder = Folder(item.path)
+              if (tmpFolder.exists) FS.findAllFiles(tmpFolder, allFiles, CFG.doSubfolders)
+            } else if (itemType == "file") {
+              var tmpFile = File(item.path)
+              if (tmpFile instanceof File && tmpFile.exists) {
+                var ext = FS.getExtension(tmpFile)
                 if (ext) {
-                  allFiles[STR.AllFiles.en] ? allFiles[STR.AllFiles.en].putPath(tmp) : (allFiles[STR.AllFiles.en] = new ActionList()).putPath(tmp);
-                  allFiles[ext] ? allFiles[ext].putPath(tmp) : (allFiles[ext] = new ActionList()).putPath(tmp);
+                  allFiles[STR.AllFiles.en] ? allFiles[STR.AllFiles.en].putPath(tmpFile) : (allFiles[STR.AllFiles.en] = new ActionList()).putPath(tmpFile);
+                  allFiles[ext] ? allFiles[ext].putPath(tmpFile) : (allFiles[ext] = new ActionList()).putPath(tmpFile);
                 }
               }
             }
@@ -732,32 +851,8 @@ function buildWindow(fromEvent) {
       }
     }
     if (CFG.sourceMode != 1) {
-      if (userSelectedFolder instanceof Array) {
-        var fol = Folder(userSelectedFolder[0])
-        if (fol.exists) {
-          if (userSelectedFolder.length > 2) {
-            CFG.lastPath = fol.fsName
-          }
-          else {
-            var fle = File(userSelectedFolder[1])
-            if (FS.isFolder(fle)) {
-              CFG.lastPath = fle.fsName
-            }
-            else {
-              CFG.lastPath = fol.fsName
-            }
-          }
-        } else {
-          for (var i = 1; i < userSelectedFolder.length; i++) {
-            var fle = File(userSelectedFolder[i])
-            if (FS.isFolder(fle) && fle.exists) {
-              CFG.lastPath = fle.fsName; break;
-            }
-            else {
-              CFG.lastPath = fle.parent.fsName; break;
-            }
-          }
-        }
+      if (CFG.sourceMode == 2) {
+        CFG.lastPath = getBridgeLastPath(userSelectedFolder)
       } else { CFG.lastPath = userSelectedFolder.fsName }
       var filterReset = applyCurrentFileFilter()
       if (CFG.sourceMode == 2) {
@@ -1741,8 +1836,7 @@ function FileSystem() {
     }
   }
   this.isFolder = function (s) {
-    if (s.fsName.lastIndexOf(".") != -1 && s.fsName.length - s.fsName.lastIndexOf(".") <= 5) { return false }
-    return true
+    return s instanceof Folder
   }
   this.shortenPath = function (s) {
     var win;
