@@ -218,9 +218,9 @@ function buildWindow(fromEvent) {
     var dlFilter_array = [STR.AllFiles];
     var dlFilter = gr.add("dropdownlist", undefined, undefined, { items: dlFilter_array });
     dlFilter.selection = 0
-    var bnExceptSelected = gr.add("button");
-    bnExceptSelected.text = STR.ExceptSelected;
-    bnExceptSelected.visible = false;
+    var chExceptSelected = gr.add("checkbox");
+    chExceptSelected.text = STR.ExceptSelected;
+    chExceptSelected.visible = false;
     var chAcr = grOpenOptions.add("checkbox");
     chAcr.text = STR.Acr;
     var chSuppress = grOpenOptions.add("checkbox");
@@ -360,17 +360,17 @@ function buildWindow(fromEvent) {
     CFG.lastFileType = this.selection.text
     if (this.selection.index == 0) CFG.excludeSelectedType = false
     if (CFG.lastPath != "") enumFiles(Folder(CFG.lastPath), false)
-    updateExceptSelectedButton()
+    updateExceptSelectedCheckbox()
     if (wasExceptSelected || CFG.excludeSelectedType) AM.putScriptSettings(CFG)
     ok.enabled = bnOkStatus()
   }
-  bnExceptSelected.onClick = function () {
+  chExceptSelected.onClick = function () {
     if (!dlFilter.selection || dlFilter.selection.index == 0) return
     CFG.lastFileType = dlFilter.selection.text
-    CFG.excludeSelectedType = !CFG.excludeSelectedType
+    CFG.excludeSelectedType = this.value
     applyCurrentFileFilter()
     stCounter.text = STR.Counter + CFG.fileList.count
-    updateExceptSelectedButton()
+    updateExceptSelectedCheckbox()
     AM.putScriptSettings(CFG)
     ok.enabled = bnOkStatus()
   }
@@ -591,7 +591,7 @@ function buildWindow(fromEvent) {
         stCounter.text = STR.Counter + CFG.total
         ok.text = STR.Next
         cancel.text = STR.StopProc
-        dlSource.enabled = bnSourceFolder.enabled = chSubfld.enabled = chReverseOrder.enabled = dlFilter.enabled = stFilter.enabled = bnExceptSelected.enabled = false
+        dlSource.enabled = bnSourceFolder.enabled = chSubfld.enabled = chReverseOrder.enabled = dlFilter.enabled = stFilter.enabled = chExceptSelected.enabled = false
         AM.getScriptSettings(CFG)
       }
       chSubfld.value = CFG.doSubfolders
@@ -620,7 +620,7 @@ function buildWindow(fromEvent) {
     for (var i = 0; i < CFG.options.count; i++) { addAction(pnAtn, CFG.options.getObjectValue(i)) }
     renew = true
     if (dlSave.selection == CFG.saveMode) { dlSave.onChange() } else { dlSave.selection = CFG.saveMode == 3 ? 2 : CFG.saveMode }
-    updateExceptSelectedButton()
+    updateExceptSelectedCheckbox()
     ok.enabled = bnOkStatus()
     w.layout.layout(true)
   }
@@ -779,10 +779,10 @@ function buildWindow(fromEvent) {
     }
     return ""
   }
-  function updateExceptSelectedButton() {
+  function updateExceptSelectedCheckbox() {
     var hasFormat = dlFilter.selection != null && dlFilter.selection.index > 0
-    bnExceptSelected.visible = hasFormat
-    bnExceptSelected.text = CFG.excludeSelectedType && hasFormat ? "[x] " + localize(STR.ExceptSelected) : localize(STR.ExceptSelected)
+    chExceptSelected.visible = hasFormat
+    chExceptSelected.value = CFG.excludeSelectedType && hasFormat
     if (w.visible) w.layout.layout(true)
   }
   function getCurrentFileFilter() {
@@ -873,7 +873,7 @@ function buildWindow(fromEvent) {
           dlFilter.add("item", shortList[i])
         }
         if (dlFilter.find(CFG.lastFileType)) { dlFilter.selection = dlFilter.find(CFG.lastFileType).index } else { dlFilter.selection = 0 }
-        updateExceptSelectedButton()
+        updateExceptSelectedCheckbox()
         if (filterReset) AM.putScriptSettings(CFG)
       }
     } else {
