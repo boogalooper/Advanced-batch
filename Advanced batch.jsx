@@ -1220,15 +1220,9 @@ function doLoop() {
                   var f = new File(File($.fileName).path + '/' + cmd.getString(gScript))
                   if (!f.exists) { alert(localize(STR.ErrScript, cmd.getString(gScript))); CFG.globalErr = true; break; }
                   try {
-                    var bt = new BridgeTalk(),
-                      ph = BridgeTalk.getSpecifier('photoshop'),
-                      fn = ";f('" + f + "');",
-                      z = "(function fnctn(scriptPath) {\
-                        $.evalFile(File(scriptPath))\
-                    })"
-                    bt.target = ph;
-                    bt.body = "var f=" + z + fn;
-                    bt.send(10);
+                    var scriptDesc = new ActionDescriptor()
+                    scriptDesc.putPath(s2t("javaScript"), f)
+                    executeAction(s2t("AdobeScriptAutomation Scripts"), scriptDesc, DialogModes.NO)
                   } catch (e) { alert(e); CFG.globalErr = true; break; }
                   CFG.doneCounter++
                   CFG.continue = 0
